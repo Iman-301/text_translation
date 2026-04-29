@@ -1,0 +1,4 @@
+Working memory supports temporary storage and manipulation of information.
+Selective attention helps the brain prioritize relevant stimuli.
+Language processing involves syntax, semantics, and contextual interpretation.
+Neural network models can approximate some aspects of human language behavior.
