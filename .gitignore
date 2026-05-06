@@ -26,3 +26,21 @@ Thumbs.db
 
 # Data outputs
 data/*_to_*.txt
+
+# Seq2Seq Project - Large Files
+# Trained models (very large - 24MB+)
+seq2seq/models/checkpoints/*.pt
+
+# Vocabularies (can be regenerated)
+seq2seq/data/vocab/*.pkl
+
+# Raw data (can be re-downloaded)
+seq2seq/data/raw/*.zip
+seq2seq/data/raw/*.txt
+
+# Processed data (can be regenerated)
+seq2seq/data/processed/*.src
+seq2seq/data/processed/*.tgt
+
+# Visualizations (can be regenerated)
+seq2seq/visualizations/*.png

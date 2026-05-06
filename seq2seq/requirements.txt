@@ -1,0 +1,20 @@
+# Deep Learning Framework
+torch>=2.0.0
+
+# Data Processing
+numpy>=1.24.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Testing
+pytest>=7.4.0
+hypothesis>=6.82.0
+
+# Progress Bars
+tqdm>=4.65.0
+
+# Jupyter Notebook (optional for demo)
+jupyter>=1.0.0
+ipykernel>=6.25.0
