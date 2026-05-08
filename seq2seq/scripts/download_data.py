@@ -106,17 +106,37 @@ def extract_and_process(
         val_split: Fraction of data for validation (default: 0.1 = 10%)
     """
     print(f"\nExtracting {zip_path}...")
-    
-    # Extract zip file
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(zip_path.parent)
-    
-    # Find the extracted text file (usually named like "fra.txt")
-    txt_files = list(zip_path.parent.glob("*.txt"))
+
+    # Extract each zip into its own folder to avoid mixing files across languages.
+    # Example: data/raw/fra-eng.zip -> data/raw/fra-eng/
+    extract_dir = zip_path.parent / zip_path.stem
+    extract_dir.mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        zip_ref.extractall(extract_dir)
+
+        # Prefer .txt files that are part of this zip (not leftovers from other zips).
+        members = [Path(m) for m in zip_ref.namelist()]
+        txt_members = [m for m in members if m.suffix.lower() == ".txt"]
+
+    txt_files = [extract_dir / m for m in txt_members if (extract_dir / m).exists()]
+    if not txt_files:
+        # Fallback: any .txt in extract_dir
+        txt_files = list(extract_dir.glob("*.txt"))
     if not txt_files:
         raise FileNotFoundError(f"No .txt file found after extracting {zip_path}")
-    
-    data_file = txt_files[0]
+
+    # Exclude metadata files like "_about.txt" when possible.
+    candidates = [
+        p
+        for p in txt_files
+        if p.name.lower() not in {"_about.txt", "readme.txt", "license.txt"}
+        and not p.name.lower().startswith("_")
+    ]
+    if not candidates:
+        candidates = txt_files
+
+    data_file = max(candidates, key=lambda p: p.stat().st_size)
     print(f"Processing {data_file}...")
     
     # Read and filter sentence pairs

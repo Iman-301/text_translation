@@ -4,10 +4,11 @@ Utility Functions for Seq2Seq Translation
 This module provides helper functions for tokenization, masking, and visualization.
 """
 
-import torch
-import matplotlib.pyplot as plt
-from typing import List
+import os
 from pathlib import Path
+from typing import List
+
+import torch
 
 
 def tokenize(text: str) -> List[str]:
@@ -60,6 +61,14 @@ def plot_loss_curves(
         val_losses: List of validation losses per epoch
         save_path: Path to save the plot
     """
+    # Avoid matplotlib/font cache issues in locked-down environments by forcing
+    # its config/cache into the project directory.
+    mpl_dir = Path(".mplconfig").resolve()
+    mpl_dir.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("MPLCONFIGDIR", str(mpl_dir))
+
+    import matplotlib.pyplot as plt
+
     plt.figure(figsize=(10, 6))
     epochs = range(1, len(train_losses) + 1)
     

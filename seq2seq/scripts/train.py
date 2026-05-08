@@ -76,40 +76,48 @@ def main():
     parser = argparse.ArgumentParser(description="Train seq2seq translation model")
     
     # Data arguments
-    parser.add_argument('--data_dir', type=str, default='data/processed',
-                       help='Directory containing processed data')
+    parser.add_argument('--data_dir', type=str, default='data/processed_multilingual',
+                       help='Directory containing processed data (default: data/processed_multilingual)')
     parser.add_argument('--vocab_dir', type=str, default='data/vocab',
                        help='Directory to save vocabularies')
     parser.add_argument('--checkpoint_dir', type=str, default='models/checkpoints',
                        help='Directory to save model checkpoints')
     
     # Model arguments
-    parser.add_argument('--embedding_dim', type=int, default=256,
-                       help='Embedding dimension (default: 256)')
-    parser.add_argument('--hidden_dim', type=int, default=512,
-                       help='Hidden dimension (default: 512)')
+    # Defaults tuned for better quality on CPU (~1 hour for the course-scale dataset).
+    parser.add_argument('--embedding_dim', type=int, default=128,
+                       help='Embedding dimension (default: 128)')
+    parser.add_argument('--hidden_dim', type=int, default=256,
+                       help='Hidden dimension (default: 256)')
     parser.add_argument('--cell_type', type=str, default='LSTM', choices=['LSTM', 'GRU'],
                        help='RNN cell type (default: LSTM)')
-    parser.add_argument('--dropout', type=float, default=0.0,
-                       help='Dropout probability (default: 0.0)')
+    parser.add_argument('--dropout', type=float, default=0.1,
+                       help='Dropout probability (default: 0.1)')
     
     # Training arguments
-    parser.add_argument('--batch_size', type=int, default=32,
-                       help='Batch size (default: 32)')
-    parser.add_argument('--epochs', type=int, default=50,
-                       help='Number of epochs (default: 50)')
+    parser.add_argument('--batch_size', type=int, default=64,
+                       help='Batch size (default: 64)')
+    parser.add_argument('--epochs', type=int, default=30,
+                       help='Number of epochs (default: 30)')
     parser.add_argument('--learning_rate', type=float, default=0.001,
                        help='Learning rate (default: 0.001)')
     parser.add_argument('--grad_clip', type=float, default=1.0,
                        help='Gradient clipping threshold (default: 1.0)')
-    parser.add_argument('--early_stopping_patience', type=int, default=5,
-                       help='Early stopping patience (default: 5)')
+    parser.add_argument('--early_stopping_patience', type=int, default=4,
+                       help='Early stopping patience (default: 4)')
+
+    # Output / plotting
+    parser.add_argument(
+        '--plot_losses',
+        action='store_true',
+        help='If set, save loss curves with matplotlib (may fail on locked-down systems)'
+    )
     
     # Vocabulary arguments
-    parser.add_argument('--min_freq', type=int, default=2,
-                       help='Minimum word frequency (default: 2)')
-    parser.add_argument('--max_vocab_size', type=int, default=10000,
-                       help='Maximum vocabulary size (default: 10000)')
+    parser.add_argument('--min_freq', type=int, default=1,
+                       help='Minimum word frequency (default: 1)')
+    parser.add_argument('--max_vocab_size', type=int, default=50000,
+                       help='Maximum vocabulary size (default: 50000)')
     
     # Device
     parser.add_argument('--device', type=str, default='cpu', choices=['cpu', 'cuda'],
@@ -246,14 +254,19 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
         early_stopping_patience=args.early_stopping_patience
     )
-    
-    # Plot loss curves
-    print("\nPlotting loss curves...")
-    plot_loss_curves(
-        history['train_losses'],
-        history['val_losses'],
-        'visualizations/loss_curves.png'
-    )
+
+    # Plot loss curves (optional; can fail if font cache is unwritable)
+    if args.plot_losses:
+        print("\nPlotting loss curves...")
+        try:
+            plot_loss_curves(
+                history['train_losses'],
+                history['val_losses'],
+                'visualizations/loss_curves.png'
+            )
+            print("Loss curves saved to: visualizations/loss_curves.png")
+        except Exception as exc:
+            print(f"Warning: could not plot loss curves: {exc}")
     
     print("\n" + "=" * 60)
     print("Training Complete!")
@@ -262,7 +275,8 @@ def main():
     print(f"Total training time: {history['total_time'] / 60:.1f} minutes")
     print(f"\nModel saved to: {args.checkpoint_dir}/best_model.pt")
     print(f"Vocabularies saved to: {args.vocab_dir}/")
-    print(f"Loss curves saved to: visualizations/loss_curves.png")
+    if args.plot_losses:
+        print("Loss curves saved to: visualizations/loss_curves.png")
     print("\nNext steps:")
     print("  1. Translate sentences: python scripts/translate.py")
     print("  2. Visualize attention: python scripts/visualize_samples.py")

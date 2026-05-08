@@ -11,87 +11,112 @@ Translation supports:
 - Cross-cultural experiment materials and participant communication.
 - Language-processing research workflows in NLP and psycholinguistics.
 
+This project also includes an optional **from-scratch Seq2Seq + Attention** implementation (educational) that connects the model components to:
+- **Working memory** (encoder state)
+- **Selective attention** (attention weights)
+- **Incremental language production** (decoder)
+
 ## Project Type
 
 - Topic: NLP
 - Title: Text Translation
-- Approach: Pretrained neural machine translation models (no fine-tuning required for baseline)
+- Approach: From-scratch Seq2Seq+Attention to demonstrate core cognitive/NLP concepts
 
 ## Features
 
-- Translate text between multiple language pairs.
+- 100% **from-scratch** Seq2Seq + Attention translation system (educational).
 - Simple command-line interface.
-- Optional Gradio web interface.
-- Batch translation from a text file.
+- Gradio web interface (presentation-friendly).
+- Greedy decoding and beam search decoding.
 
 ## Tech Stack
 
 - Python 3.10+
-- `transformers` + `torch`
-- Hugging Face MarianMT models (`Helsinki-NLP/opus-mt-*`)
-- Optional `gradio` for UI
+- `torch` + `numpy`
+- `gradio` for UI
+- Custom Seq2Seq + Bahdanau attention (`seq2seq/`)
+
+## Quick Demo (Recommended for Presentation)
+
+Start the web UI (always run from the repo root):
+
+```bash
+python3 run_web.py
+```
+
+Then open the local URL printed in the terminal (usually `http://127.0.0.1:7860`).
 
 ## Setup
 
 1. Create and activate a virtual environment:
 
-```powershell
+```bash
 python -m venv .venv
-.venv\Scripts\Activate.ps1
+source .venv/bin/activate
 ```
 
 2. Install dependencies:
 
-```powershell
+```bash
 pip install -r requirements.txt
 ```
 
 ## Run (CLI)
 
-```powershell
-python src/main.py --text "Attention and memory are tightly connected cognitive processes." --src en --tgt ar
-```
+Translate a single sentence:
 
-Batch mode:
-
-```powershell
-python src/main.py --input_file data/sample_texts_en.txt --src en --tgt fr
+```bash
+python3 run_cli.py --text "how are you" --to fr
+python3 run_cli.py --text "how are you" --to es
+python3 run_cli.py --text "how are you" --to de
 ```
 
 ## Run (Web UI)
 
-```powershell
-python src/app.py
+```bash
+python3 run_web.py
 ```
 
 Then open the local URL shown in your terminal.
 
-## Supported Language Codes (common)
+## Training (required)
 
-- `en` English
-- `ar` Arabic
-- `fr` French
-- `de` German
-- `es` Spanish
-- `it` Italian
-- `ru` Russian
-- `tr` Turkish
-- `zh` Chinese
-- `ja` Japanese
+This project trains **one multilingual model** for 3 easy target languages (**French/Spanish/German**)
+using target-language tags in the input (`<2fr>`, `<2es>`, `<2de>`).
 
-Note: Not every source-target pair is available for every model naming pattern. If a direct model is unavailable, the app explains the issue.
+### Download data from Tatoeba (needs internet)
+
+```bash
+cd seq2seq
+python3 scripts/download_data_multilingual.py --num_samples_per_lang 3000
+python3 scripts/train.py --data_dir data/processed_multilingual --epochs 20 --min_freq 2
+cd ..
+```
+
+After training, the web UI expects:
+- `seq2seq/models/checkpoints/best_model.pt`
+- `seq2seq/data/vocab/src_vocab.pkl`
+- `seq2seq/data/vocab/tgt_vocab.pkl`
+
+## Common Issues
+
+### 1) Running from the wrong folder
+Always run from the repo root using:
+- `python3 run_web.py`
+- `python3 run_cli.py ...`
 
 ## Project Structure
 
 ```
-cognitive/
-├─ data/
-│  └─ sample_texts_en.txt
+text_translation/
 ├─ src/
-│  ├─ translator.py
-│  ├─ main.py
-│  └─ app.py
+│  ├─ app.py              # Gradio UI (scratch-only)
+│  ├─ scratch_cli.py       # CLI (scratch-only)
+│  └─ seq2seq_backend.py   # Loads scratch model + runs inference
+├─ seq2seq/                # from-scratch educational implementation
 ├─ requirements.txt
+├─ run_cli.py
+├─ run_web.py
 └─ README.md
 ```
 
@@ -105,7 +130,16 @@ Fine-tuning is optional if you want better performance on a specific domain (for
 ## Suggested report sections
 
 1. Problem statement and cognitive-science relevance.
-2. Model choice (pretrained MarianMT).
-3. Method (tokenization, sequence-to-sequence generation).
-4. Demo results on sample research text.
-5. Limitations and future work (domain adaptation/fine-tuning, evaluation with BLEU/COMET).
+2. From-scratch model (Seq2Seq + Attention) and cognitive parallels.
+4. Demo results on cognitive-science sample text + brief error analysis.
+5. Limitations and future work (more data, better tokenization, evaluation with BLEU, handling pragmatics).
+
+## 20-minute physical demo script (suggested)
+
+1. **Problem + cognitive science motivation (2 min)**: multilingual research + experiment materials.
+2. **System overview (3 min)**: scratch Seq2Seq + Attention and why it relates to cognition.
+3. **Live demo: scratch Seq2Seq (12 min)**:
+   - Translate 2–3 simple sentences
+   - Switch greedy vs beam search
+   - Mention attention as a model of selective attention (optionally show attention visualizations from `seq2seq/visualizations/`)
+5. **Limitations + future work (3 min)**: domain vocabulary, long sentences, pragmatics, evaluation metrics.

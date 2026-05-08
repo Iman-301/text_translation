@@ -41,6 +41,14 @@ def main():
                        help='Maximum translation length (default: 50)')
     parser.add_argument('--device', type=str, default='cpu', choices=['cpu', 'cuda'],
                        help='Device to use (default: cpu)')
+
+    # Model shape (must match training)
+    parser.add_argument('--embedding_dim', type=int, default=256,
+                       help='Embedding dim used during training (default: 256)')
+    parser.add_argument('--hidden_dim', type=int, default=512,
+                       help='Hidden dim used during training (default: 512)')
+    parser.add_argument('--cell_type', type=str, default='LSTM', choices=['LSTM', 'GRU'],
+                       help='RNN cell type used during training (default: LSTM)')
     
     args = parser.parse_args()
     
@@ -70,10 +78,10 @@ def main():
     checkpoint = torch.load(args.checkpoint, map_location=device)
     
     # Get model configuration from checkpoint
-    # Use the same configuration as training (from train.py defaults)
-    embedding_dim = 256
-    hidden_dim = 512
-    cell_type = 'LSTM'
+    # Must match the configuration used during training.
+    embedding_dim = args.embedding_dim
+    hidden_dim = args.hidden_dim
+    cell_type = args.cell_type
     
     print(f"Model configuration:")
     print(f"  Embedding dim: {embedding_dim}")

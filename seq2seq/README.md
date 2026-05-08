@@ -191,18 +191,9 @@ seq2seq/
 └── README.md             # ✅ This file
 ```
 
-## Comparison with Pretrained Model
+## Notes
 
-Your existing code in `../src/` uses pretrained MarianMT models from Hugging Face. This seq2seq implementation differs in:
-
-| Aspect | Pretrained (../src/) | From Scratch (seq2seq/) |
-|--------|---------------------|------------------------|
-| **Purpose** | Production-ready translation | Educational understanding |
-| **Training** | Pre-trained on millions of sentences | Train yourself on 1000-5000 pairs |
-| **Quality** | High accuracy | Basic but functional |
-| **Understanding** | Black box | See every component |
-| **Cognitive Science** | Limited connection | Explicit parallels |
-| **Time** | Instant (download model) | ~2 hours training |
+This is an educational, from-scratch implementation. It is designed for learning and cognitive-science discussion (attention, working memory, incremental production), not for production translation quality.
 
 ## Next Steps
 
