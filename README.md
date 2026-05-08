@@ -81,15 +81,16 @@ Then open the local URL shown in your terminal.
 
 ## Training (required)
 
-This project trains **one multilingual model** for 3 easy target languages (**French/Spanish/German**)
-using target-language tags in the input (`<2fr>`, `<2es>`, `<2de>`).
+This project trains **one many-to-many model** using **target-language tags** in the input:
+- Forward: `<2fr> English...` → French, `<2am> English...` → Amharic, etc.
+- Reverse: `<2en> French...` → English, `<2en> Amharic...` → English, etc.
 
-### Download data from Tatoeba (needs internet)
+### Prepare data (needs internet)
 
 ```bash
 cd seq2seq
-python3 scripts/download_data_multilingual.py --num_samples_per_lang 3000
-python3 scripts/train.py --data_dir data/processed_multilingual --epochs 20 --min_freq 2
+python3 scripts/prepare_data_many2many.py --num_samples_per_lang 3000
+python3 scripts/train.py --data_dir data/processed_many2many --use_bpe --bpe_vocab_size 16000 --epochs 30 --min_freq 1
 cd ..
 ```
 
@@ -97,6 +98,23 @@ After training, the web UI expects:
 - `seq2seq/models/checkpoints/best_model.pt`
 - `seq2seq/data/vocab/src_vocab.pkl`
 - `seq2seq/data/vocab/tgt_vocab.pkl`
+- `seq2seq/data/vocab/spm.model` (if trained with `--use_bpe`)
+
+### Run training under tmux (recommended)
+
+This keeps training running even if your terminal disconnects.
+
+```bash
+tmux new -s nmt \
+  'cd seq2seq && \
+   python3 scripts/prepare_data_many2many.py --num_samples_per_lang 3000 && \
+   python3 scripts/train.py --data_dir data/processed_many2many --use_bpe --bpe_vocab_size 16000 --epochs 30 --min_freq 1 |& tee -a train.log'
+```
+
+Useful tmux commands:
+- Detach: `Ctrl+b` then `d`
+- Reattach: `tmux attach -t nmt`
+- Kill session: `tmux kill-session -t nmt`
 
 ## Common Issues
 

@@ -62,6 +62,9 @@ def _load_seq2seq_modules():
         if spec is None or spec.loader is None:
             raise Seq2SeqBackendError(f"Could not import {file_path}")
         module = importlib.util.module_from_spec(spec)
+        # dataclasses (and other stdlib features) expect the defining module to be
+        # present in sys.modules during execution.
+        sys.modules[unique_name] = module
         spec.loader.exec_module(module)
         return module
 
@@ -69,9 +72,10 @@ def _load_seq2seq_modules():
     decoder_m = load_module("_seq2seq_decoder", "decoder.py")
     attention_m = load_module("_seq2seq_attention", "attention.py")
     utils_m = load_module("_seq2seq_utils", "utils.py")
+    subword_m = load_module("_seq2seq_subword", "subword_tokenizer.py")
     translator_m = load_module("_seq2seq_translator", "translator.py")
 
-    return encoder_m, decoder_m, attention_m, utils_m, translator_m
+    return encoder_m, decoder_m, attention_m, utils_m, subword_m, translator_m
 
 
 @lru_cache(maxsize=2)
@@ -83,7 +87,7 @@ def _load_seq2seq_runner(
     hidden_dim: int,
     cell_type: str,
 ):
-    encoder_m, decoder_m, attention_m, utils_m, translator_m = _load_seq2seq_modules()
+    encoder_m, decoder_m, attention_m, utils_m, subword_m, translator_m = _load_seq2seq_modules()
 
     ckpt = Path(checkpoint_path)
     vocab = Path(vocab_dir)
@@ -114,6 +118,15 @@ def _load_seq2seq_runner(
 
     src_vocab = utils_m.load_vocab(str(src_vocab_path))
     tgt_vocab = utils_m.load_vocab(str(tgt_vocab_path))
+
+    # Optional SentencePiece model (for BPE-trained checkpoints).
+    tokenizer = None
+    spm_model = vocab / "spm.model"
+    if spm_model.exists():
+        try:
+            tokenizer = getattr(subword_m, "SubwordTokenizer")(spm_model)
+        except Exception:
+            tokenizer = None
 
     checkpoint = torch.load(str(ckpt), map_location=real_device)
 
@@ -155,6 +168,7 @@ def _load_seq2seq_runner(
         src_vocab=src_vocab,
         tgt_vocab=tgt_vocab,
         device=real_device,
+        tokenizer=tokenizer,
     )
 
     return translator, real_device

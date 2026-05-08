@@ -22,6 +22,7 @@ from decoder import Decoder
 from attention import BahdanauAttention
 from translator import Translator
 from visualizer import AttentionVisualizer
+from subword_tokenizer import SubwordTokenizer
 from utils import load_vocab
 
 
@@ -74,6 +75,15 @@ def main():
     vocab_dir = Path(args.vocab_dir)
     src_vocab = load_vocab(str(vocab_dir / 'src_vocab.pkl'))
     tgt_vocab = load_vocab(str(vocab_dir / 'tgt_vocab.pkl'))
+
+    tokenizer = None
+    spm_model = vocab_dir / "spm.model"
+    if spm_model.exists():
+        try:
+            tokenizer = SubwordTokenizer(spm_model)
+            print(f"Loaded SentencePiece model: {spm_model}")
+        except Exception as exc:
+            print(f"Warning: could not load SentencePiece model ({exc}); using whitespace tokenization.")
     
     # Load checkpoint
     print(f"\nLoading checkpoint from {args.checkpoint}...")
@@ -115,7 +125,8 @@ def main():
         decoder=decoder,
         src_vocab=src_vocab,
         tgt_vocab=tgt_vocab,
-        device=device
+        device=device,
+        tokenizer=tokenizer,
     )
     
     visualizer = AttentionVisualizer()

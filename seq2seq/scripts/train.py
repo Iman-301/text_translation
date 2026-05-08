@@ -30,6 +30,7 @@ from attention import BahdanauAttention
 from dataset import TranslationDataset
 from trainer import Trainer
 from utils import plot_loss_curves, count_parameters, save_vocab
+from subword_tokenizer import SentencePieceConfig, SubwordTokenizer, train_sentencepiece
 
 
 def build_vocabularies(train_src_file: str, train_tgt_file: str, min_freq: int = 2, max_size: int = 10000):
@@ -72,6 +73,61 @@ def build_vocabularies(train_src_file: str, train_tgt_file: str, min_freq: int =
     return src_vocab, tgt_vocab
 
 
+def _maybe_train_sentencepiece(
+    *,
+    vocab_dir: Path,
+    train_src_file: Path,
+    train_tgt_file: Path,
+    cfg: SentencePieceConfig,
+    force: bool,
+) -> Path:
+    spm_model = vocab_dir / "spm.model"
+    spm_vocab = vocab_dir / "spm.vocab"
+    if spm_model.exists() and spm_vocab.exists() and not force:
+        return spm_model
+
+    print("\nTraining SentencePiece BPE...")
+    vocab_dir.mkdir(parents=True, exist_ok=True)
+    model_path, _ = train_sentencepiece(
+        input_paths=[train_src_file, train_tgt_file],
+        model_prefix=vocab_dir / "spm",
+        cfg=cfg,
+    )
+    # train_sentencepiece writes spm.model/spm.vocab; normalize name to spm.model
+    if model_path.name != "spm.model":
+        (vocab_dir / "spm.model").write_bytes(model_path.read_bytes())
+    print(f"SentencePiece model saved to: {spm_model}")
+    return spm_model
+
+
+def _encode_line_with_tag(tokenizer: SubwordTokenizer, line: str) -> str:
+    line = (line or "").strip()
+    if not line:
+        return ""
+    parts = line.split()
+    first = parts[0] if parts else ""
+    has_tag = first.startswith("<2") and first.endswith(">") and len(first) <= 8
+    if has_tag:
+        tag = first
+        rest = " ".join(parts[1:]).strip()
+        pieces = tokenizer.encode(rest)
+        return " ".join([tag] + pieces).strip()
+    return " ".join(tokenizer.encode(line)).strip()
+
+
+def _bpe_encode_file(tokenizer: SubwordTokenizer, in_path: Path, out_path: Path, *, keep_tag: bool) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(in_path, "r", encoding="utf-8") as fin, open(out_path, "w", encoding="utf-8") as fout:
+        for raw in fin:
+            raw = raw.strip()
+            if not raw:
+                continue
+            if keep_tag:
+                fout.write(_encode_line_with_tag(tokenizer, raw) + "\n")
+            else:
+                fout.write(" ".join(tokenizer.encode(raw)) + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train seq2seq translation model")
     
@@ -82,6 +138,26 @@ def main():
                        help='Directory to save vocabularies')
     parser.add_argument('--checkpoint_dir', type=str, default='models/checkpoints',
                        help='Directory to save model checkpoints')
+
+    # Tokenization (SentencePiece BPE)
+    parser.add_argument(
+        "--use_bpe",
+        action="store_true",
+        help="If set, train/use SentencePiece BPE and encode train/val files before training.",
+    )
+    parser.add_argument("--bpe_vocab_size", type=int, default=16000, help="SentencePiece vocab size (default: 16000)")
+    parser.add_argument("--bpe_model_type", type=str, default="bpe", help="SentencePiece model type (default: bpe)")
+    parser.add_argument(
+        "--bpe_character_coverage",
+        type=float,
+        default=1.0,
+        help="SentencePiece character coverage (default: 1.0; good for non-Latin scripts)",
+    )
+    parser.add_argument(
+        "--bpe_force_train",
+        action="store_true",
+        help="If set, retrain SentencePiece model even if vocab_dir/spm.model exists.",
+    )
     
     # Model arguments
     # Defaults tuned for better quality on CPU (~1 hour for the course-scale dataset).
@@ -151,15 +227,52 @@ def main():
         print("Please run: python scripts/download_data.py")
         return
     
+    vocab_dir = Path(args.vocab_dir)
+
+    # Optional: SentencePiece BPE encode the dataset first.
+    if args.use_bpe:
+        spm_cfg = SentencePieceConfig(
+            vocab_size=int(args.bpe_vocab_size),
+            model_type=str(args.bpe_model_type),
+            character_coverage=float(args.bpe_character_coverage),
+        )
+        spm_model = _maybe_train_sentencepiece(
+            vocab_dir=vocab_dir,
+            train_src_file=train_src_file,
+            train_tgt_file=train_tgt_file,
+            cfg=spm_cfg,
+            force=bool(args.bpe_force_train),
+        )
+        tokenizer = SubwordTokenizer(spm_model)
+
+        bpe_dir = Path(args.data_dir) / "_bpe"
+        bpe_train_src = bpe_dir / "train.src"
+        bpe_train_tgt = bpe_dir / "train.tgt"
+        bpe_val_src = bpe_dir / "val.src"
+        bpe_val_tgt = bpe_dir / "val.tgt"
+
+        print("\nEncoding dataset with SentencePiece...")
+        _bpe_encode_file(tokenizer, train_src_file, bpe_train_src, keep_tag=True)
+        _bpe_encode_file(tokenizer, train_tgt_file, bpe_train_tgt, keep_tag=False)
+        _bpe_encode_file(tokenizer, Path(args.data_dir) / "val.src", bpe_val_src, keep_tag=True)
+        _bpe_encode_file(tokenizer, Path(args.data_dir) / "val.tgt", bpe_val_tgt, keep_tag=False)
+
+        train_src_file = bpe_train_src
+        train_tgt_file = bpe_train_tgt
+        val_src_file = bpe_val_src
+        val_tgt_file = bpe_val_tgt
+    else:
+        val_src_file = Path(args.data_dir) / "val.src"
+        val_tgt_file = Path(args.data_dir) / "val.tgt"
+
     src_vocab, tgt_vocab = build_vocabularies(
         str(train_src_file),
         str(train_tgt_file),
         min_freq=args.min_freq,
-        max_size=args.max_vocab_size
+        max_size=args.max_vocab_size,
     )
     
     # Save vocabularies
-    vocab_dir = Path(args.vocab_dir)
     save_vocab(src_vocab, str(vocab_dir / 'src_vocab.pkl'))
     save_vocab(tgt_vocab, str(vocab_dir / 'tgt_vocab.pkl'))
     
@@ -172,8 +285,6 @@ def main():
         tgt_vocab
     )
     
-    val_src_file = Path(args.data_dir) / 'val.src'
-    val_tgt_file = Path(args.data_dir) / 'val.tgt'
     val_dataset = TranslationDataset(
         str(val_src_file),
         str(val_tgt_file),

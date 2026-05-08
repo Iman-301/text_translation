@@ -2,3 +2,5 @@ torch
 numpy
 fastapi
 uvicorn
+sentencepiece
+datasets

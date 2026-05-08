@@ -15,6 +15,10 @@ hypothesis>=6.82.0
 # Progress Bars
 tqdm>=4.65.0
 
+# Subword tokenization + OPUS downloads
+sentencepiece>=0.2.0
+datasets>=2.19.0
+
 # Jupyter Notebook (optional for demo)
 jupyter>=1.0.0
 ipykernel>=6.25.0

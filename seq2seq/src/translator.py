@@ -13,7 +13,7 @@ produce translations without explicit guidance.
 
 import torch
 import torch.nn as nn
-from typing import List, Tuple, Optional
+from typing import Iterable, List, Tuple, Optional
 import numpy as np
 
 
@@ -40,13 +40,15 @@ class Translator:
         decoder: nn.Module,
         src_vocab,
         tgt_vocab,
-        device: str = 'cpu'
+        device: str = 'cpu',
+        tokenizer: Optional[object] = None,
     ):
         self.encoder = encoder.to(device)
         self.decoder = decoder.to(device)
         self.src_vocab = src_vocab
         self.tgt_vocab = tgt_vocab
         self.device = device
+        self.tokenizer = tokenizer
         
         # Set to evaluation mode
         self.encoder.eval()
@@ -81,8 +83,10 @@ class Translator:
             >>> print(translation)
             'Bonjour le monde'
         """
-        # Tokenize source sentence
-        src_tokens = sentence.lower().strip().split()
+        # Tokenize source sentence.
+        # If using SentencePiece, keep the multilingual target tag as a separate token.
+        sentence = (sentence or "").strip()
+        src_tokens = self._tokenize_src(sentence)
         
         # Encode to indices
         src_indices = [self.src_vocab.SOS_IDX] + \
@@ -102,18 +106,58 @@ class Translator:
             else:
                 raise ValueError(f"Unknown method: {method}. Use 'greedy' or 'beam_search'")
         
-        # Decode to words
+        # Decode to tokens, then detokenize.
         tgt_tokens = self.tgt_vocab.decode(tgt_indices)
-        
-        # Remove special tokens and join
-        tgt_tokens = [t for t in tgt_tokens if t not in [
-            self.tgt_vocab.SOS_TOKEN,
-            self.tgt_vocab.EOS_TOKEN,
-            self.tgt_vocab.PAD_TOKEN
-        ]]
-        translation = ' '.join(tgt_tokens)
+        tgt_tokens = [
+            t
+            for t in tgt_tokens
+            if t
+            and t
+            not in [
+                self.tgt_vocab.SOS_TOKEN,
+                self.tgt_vocab.EOS_TOKEN,
+                self.tgt_vocab.PAD_TOKEN,
+            ]
+        ]
+
+        translation = self._detokenize_tgt(tgt_tokens)
         
         return translation, attention_weights
+
+    def _tokenize_src(self, sentence: str) -> list[str]:
+        # Detect a leading <2xx> tag and preserve it.
+        parts = sentence.split()
+        if not parts:
+            return []
+
+        first = parts[0]
+        has_tag = first.startswith("<2") and first.endswith(">") and len(first) <= 8
+        if has_tag:
+            tag = first
+            rest = " ".join(parts[1:]).strip()
+        else:
+            tag = None
+            rest = sentence
+
+        tok = self.tokenizer
+        if tok is not None and hasattr(tok, "encode"):
+            pieces = list(getattr(tok, "encode")(rest))
+            return [tag] + pieces if tag else pieces
+
+        # Fallback: whitespace tokens
+        lowered = rest.lower().strip()
+        pieces = lowered.split() if lowered else []
+        return [tag] + pieces if tag else pieces
+
+    def _detokenize_tgt(self, pieces: Iterable[str]) -> str:
+        tok = self.tokenizer
+        if tok is not None and hasattr(tok, "decode"):
+            try:
+                return str(getattr(tok, "decode")(list(pieces))).strip()
+            except Exception:
+                # Fallback to join if decode fails for any reason
+                pass
+        return " ".join(list(pieces)).strip()
     
     def greedy_decode(
         self,

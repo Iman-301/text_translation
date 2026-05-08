@@ -38,6 +38,7 @@ async function healthCheck() {
 function readPayload() {
   return {
     text: $("inputText").value,
+    from_lang: $("from").value,
     to: $("to").value,
     method: $("method").value,
     beam_width: Number($("beamWidth").value || 5),
@@ -56,7 +57,7 @@ async function translate() {
   try {
     const payload = readPayload();
     if (!payload.text || !payload.text.trim()) {
-      setStatus("Please enter some English text.", "error");
+      setStatus("Please enter some text.", "error");
       btn.disabled = false;
       return;
     }
@@ -124,6 +125,8 @@ window.addEventListener("DOMContentLoaded", () => {
   $("clearBtn").addEventListener("click", clearAll);
   $("copyBtn").addEventListener("click", copyOutput);
   $("method").addEventListener("change", updateBeamEnabled);
+  $("from").addEventListener("change", () => setStatus(""));
+  $("to").addEventListener("change", () => setStatus(""));
 
   $("inputText").addEventListener("keydown", (e) => {
     const isMac = navigator.platform.toLowerCase().includes("mac");

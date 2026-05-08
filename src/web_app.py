@@ -32,7 +32,8 @@ def index() -> FileResponse:
 
 class TranslateRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=5000)
-    to: Literal["fr", "es", "de"] = "fr"
+    from_lang: Literal["en", "fr", "es", "de", "am"] = "en"
+    to: Literal["fr", "es", "de", "am", "en"] = "fr"
     method: Literal["greedy", "beam_search"] = "greedy"
     beam_width: int = Field(5, ge=2, le=12)
     max_length: int = Field(50, ge=4, le=128)
@@ -46,16 +47,39 @@ def translate(payload: TranslateRequest) -> JSONResponse:
     try:
         ckpt = Path(payload.checkpoint_path)
         vocab = Path(payload.vocab_dir)
-        cfg = Seq2SeqConfig(
+        base_cfg = Seq2SeqConfig(
             checkpoint_path=(ROOT / ckpt).resolve() if not ckpt.is_absolute() else ckpt,
             vocab_dir=(ROOT / vocab).resolve() if not vocab.is_absolute() else vocab,
-            target_lang=payload.to,
             method=payload.method,
             beam_width=int(payload.beam_width),
             max_length=min(int(payload.max_length), 128),
             device=payload.device,
         )
-        out, meta = translate_with_seq2seq(payload.text, cfg)
+
+        src = payload.from_lang
+        tgt = payload.to
+        text = payload.text
+
+        if src == tgt:
+            return JSONResponse({"ok": True, "translation": text.strip(), "meta": f"noop ({src}→{tgt})"})
+
+        # Supported by training recipe:
+        # - en → {fr,es,de,am}
+        # - {fr,es,de,am} → en
+        # For {non-en} → {non-en}, pivot via English (two steps).
+        if src != "en" and tgt != "en":
+            step1_cfg = Seq2SeqConfig(**{**base_cfg.__dict__, "target_lang": "en"})
+            mid, meta1 = translate_with_seq2seq(text, step1_cfg)
+
+            step2_cfg = Seq2SeqConfig(**{**base_cfg.__dict__, "target_lang": tgt})
+            out, meta2 = translate_with_seq2seq(mid, step2_cfg)
+            return JSONResponse(
+                {"ok": True, "translation": out, "meta": f"pivot {src}→en→{tgt} | {meta1} | {meta2}"}
+            )
+
+        # Direct 1-step
+        cfg = Seq2SeqConfig(**{**base_cfg.__dict__, "target_lang": tgt})
+        out, meta = translate_with_seq2seq(text, cfg)
         return JSONResponse({"ok": True, "translation": out, "meta": meta})
     except (Seq2SeqBackendError, ValueError) as err:
         return JSONResponse({"ok": False, "error": str(err)}, status_code=400)

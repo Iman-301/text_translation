@@ -21,6 +21,7 @@ from encoder import Encoder
 from decoder import Decoder
 from attention import BahdanauAttention
 from translator import Translator
+from subword_tokenizer import SubwordTokenizer
 from utils import load_vocab
 
 
@@ -69,6 +70,15 @@ def main():
     vocab_dir = Path(args.vocab_dir)
     src_vocab = load_vocab(str(vocab_dir / 'src_vocab.pkl'))
     tgt_vocab = load_vocab(str(vocab_dir / 'tgt_vocab.pkl'))
+
+    tokenizer = None
+    spm_model = vocab_dir / "spm.model"
+    if spm_model.exists():
+        try:
+            tokenizer = SubwordTokenizer(spm_model)
+            print(f"Loaded SentencePiece model: {spm_model}")
+        except Exception as exc:
+            print(f"Warning: could not load SentencePiece model ({exc}); falling back to whitespace tokenization.")
     
     print(f"Source vocabulary size: {len(src_vocab)}")
     print(f"Target vocabulary size: {len(tgt_vocab)}")
@@ -117,7 +127,8 @@ def main():
         decoder=decoder,
         src_vocab=src_vocab,
         tgt_vocab=tgt_vocab,
-        device=device
+        device=device,
+        tokenizer=tokenizer,
     )
     
     # Translate
