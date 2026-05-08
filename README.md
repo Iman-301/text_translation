@@ -26,14 +26,14 @@ This project also includes an optional **from-scratch Seq2Seq + Attention** impl
 
 - 100% **from-scratch** Seq2Seq + Attention translation system (educational).
 - Simple command-line interface.
-- Gradio web interface (presentation-friendly).
+- Sleek web interface (presentation-friendly, no Gradio).
 - Greedy decoding and beam search decoding.
 
 ## Tech Stack
 
 - Python 3.10+
 - `torch` + `numpy`
-- `gradio` for UI
+- `fastapi` + `uvicorn` for UI/server
 - Custom Seq2Seq + Bahdanau attention (`seq2seq/`)
 
 ## Quick Demo (Recommended for Presentation)
@@ -44,7 +44,7 @@ Start the web UI (always run from the repo root):
 python3 run_web.py
 ```
 
-Then open the local URL printed in the terminal (usually `http://127.0.0.1:7860`).
+Then open `http://127.0.0.1:8000`.
 
 ## Setup
 
@@ -110,7 +110,8 @@ Always run from the repo root using:
 ```
 text_translation/
 ├─ src/
-│  ├─ app.py              # Gradio UI (scratch-only)
+│  ├─ web_app.py          # FastAPI server (scratch-only)
+│  ├─ web_ui/             # Modern single-page UI
 │  ├─ scratch_cli.py       # CLI (scratch-only)
 │  └─ seq2seq_backend.py   # Loads scratch model + runs inference
 ├─ seq2seq/                # from-scratch educational implementation

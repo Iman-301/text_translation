@@ -12,14 +12,16 @@ class Seq2SeqBackendError(Exception):
     pass
 
 
-_MULTI_TAGS: dict[str, str] = {"fr": "<2fr>", "es": "<2es>", "de": "<2de>"}
+# Target-language tags used in the source sentence.
+# For reverse translation, we also allow <2en> (requires a bidirectional-trained checkpoint).
+_MULTI_TAGS: dict[str, str] = {"fr": "<2fr>", "es": "<2es>", "de": "<2de>", "en": "<2en>", "am": "<2am>"}
 
 
 @dataclass(frozen=True)
 class Seq2SeqConfig:
     checkpoint_path: Path
     vocab_dir: Path
-    target_lang: Literal["fr", "es", "de"] = "fr"
+    target_lang: Literal["fr", "es", "de", "en", "am"] = "fr"
     method: Literal["greedy", "beam_search"] = "greedy"
     beam_width: int = 5
     max_length: int = 50
