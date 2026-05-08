@@ -67,6 +67,17 @@ def _load_hf_amharic_pairs(limit: int, seed: int) -> list[tuple[str, str]]:
     We try a small set of known dataset identifiers/configs. If none work,
     we raise a clear error so the user can choose an alternative corpus.
     """
+    # HuggingFace datasets writes to ~/.cache by default. In locked-down/sandboxed
+    # environments that can fail, so we redirect caches into the project folder.
+    import os
+
+    project_dir = Path(__file__).resolve().parent.parent
+    hf_home = (project_dir / ".hf").resolve()
+    hf_home.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("HF_HOME", str(hf_home))
+    os.environ.setdefault("HF_DATASETS_CACHE", str(hf_home / "datasets"))
+    os.environ.setdefault("HUGGINGFACE_HUB_CACHE", str(hf_home / "hub"))
+
     try:
         from datasets import load_dataset  # type: ignore
     except Exception as exc:  # pragma: no cover
@@ -74,11 +85,35 @@ def _load_hf_amharic_pairs(limit: int, seed: int) -> list[tuple[str, str]]:
             "Missing dependency: datasets. Install it with: pip install datasets"
         ) from exc
 
+    # First try a small, fast list of likely candidates.
+    # NOTE: HF dataset IDs/config names change over time, so we also have a fallback search.
     candidates: list[tuple[str, str | None]] = [
         ("opus100", "en-am"),
+        ("opus100", "am-en"),
         ("opus_books", "en-am"),
-        ("opusparacrawl", "en-am"),
+        ("opus_books", "am-en"),
+        ("Helsinki-NLP/opus-100", "en-am"),
+        ("Helsinki-NLP/opus-100", "am-en"),
     ]
+
+    def extract_pairs_from_rows(rows) -> list[tuple[str, str]]:
+        pairs: list[tuple[str, str]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            tr = row.get("translation")
+            if not isinstance(tr, dict):
+                continue
+
+            # Common keys across corpora
+            en = (tr.get("en") or tr.get("eng") or "").strip()
+            am = (tr.get("am") or tr.get("amh") or "").strip()
+            if not en or not am:
+                continue
+            pairs.append((en, am))
+            if len(pairs) >= limit:
+                break
+        return pairs
 
     last_err: Exception | None = None
     for name, config in candidates:
@@ -87,19 +122,7 @@ def _load_hf_amharic_pairs(limit: int, seed: int) -> list[tuple[str, str]]:
             # Prefer train split; some corpora might have validation/test only.
             split = "train" if "train" in ds else (list(ds.keys())[0] if len(ds) else "train")
             rows = ds[split]
-            # Normalize shapes: opus datasets usually have {"translation": {"en": "...", "am": "..."}}
-            pairs: list[tuple[str, str]] = []
-            for row in rows:
-                tr = row.get("translation") if isinstance(row, dict) else None
-                if not isinstance(tr, dict):
-                    continue
-                en = (tr.get("en") or "").strip()
-                am = (tr.get("am") or "").strip()
-                if not en or not am:
-                    continue
-                pairs.append((en, am))
-                if len(pairs) >= limit:
-                    break
+            pairs = extract_pairs_from_rows(rows)
 
             if not pairs:
                 raise RuntimeError(f"{name}:{config} contained no usable en/am pairs")
@@ -111,9 +134,67 @@ def _load_hf_amharic_pairs(limit: int, seed: int) -> list[tuple[str, str]]:
             last_err = exc
             continue
 
+    # Fallback: search HF Hub for something that contains Amharic+English translations.
+    try:
+        from huggingface_hub import HfApi  # type: ignore
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError(
+            "Could not load Amharic-English pairs. Tried common OPUS datasets and also tried to "
+            "search the HuggingFace Hub, but huggingface_hub is unavailable.\n\n"
+            "Workaround: run without Amharic for now:\n"
+            "  python scripts/prepare_data_many2many.py --langs fr es de\n\n"
+            f"Last error: {last_err}"
+        ) from exc
+
+    try:
+        api = HfApi()
+        # Keep this small to avoid rate limits.
+        results = api.list_datasets(search="am en translation", limit=20)
+        for info in results:
+            dataset_id = getattr(info, "id", None) or getattr(info, "datasetId", None)
+            if not dataset_id:
+                continue
+
+            # Try with no config first.
+            try:
+                ds = load_dataset(dataset_id)
+                split = "train" if "train" in ds else (list(ds.keys())[0] if len(ds) else "train")
+                pairs = extract_pairs_from_rows(ds[split])
+                if pairs:
+                    random.seed(seed)
+                    random.shuffle(pairs)
+                    return pairs
+            except Exception:
+                pass
+
+            # If configs exist, try likely ones.
+            try:
+                from datasets import get_dataset_config_names  # type: ignore
+
+                configs = get_dataset_config_names(dataset_id)
+                likely = [c for c in configs if ("am" in c and "en" in c)]
+                for c in likely[:8]:
+                    try:
+                        ds = load_dataset(dataset_id, c)
+                        split = "train" if "train" in ds else (list(ds.keys())[0] if len(ds) else "train")
+                        pairs = extract_pairs_from_rows(ds[split])
+                        if pairs:
+                            random.seed(seed)
+                            random.shuffle(pairs)
+                            return pairs
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+    except Exception as exc:
+        last_err = exc
+
     raise RuntimeError(
-        "Could not load Amharic-English pairs from HuggingFace datasets. "
-        "Tried: opus100/en-am, opus_books/en-am, opusparacrawl/en-am. "
+        "Could not load Amharic-English pairs from HuggingFace datasets.\n"
+        "- Tried common OPUS candidates.\n"
+        "- Tried a small Hub search fallback.\n\n"
+        "Workaround (build the dataset without Amharic):\n"
+        "  python scripts/prepare_data_many2many.py --langs fr es de\n\n"
         f"Last error: {last_err}"
     )
 
