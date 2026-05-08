@@ -1,12 +1,5 @@
 const $ = (id) => document.getElementById(id);
 
-function val(id, fallback = "") {
-  const el = $(id);
-  if (!el) return fallback;
-  // Support inputs/selects/textareas and plain divs.
-  return typeof el.value === "string" ? el.value : el.textContent || fallback;
-}
-
 function setStatus(msg, tone = "neutral") {
   const el = $("status");
   if (!el) return;
@@ -43,18 +36,15 @@ async function healthCheck() {
 }
 
 function readPayload() {
-  const checkpointFallback = "seq2seq/models/checkpoints/best_model.pt";
-  const vocabFallback = "seq2seq/data/vocab";
   return {
-    text: val("inputText", ""),
-    to: val("to", "fr"),
-    // Simple UI defaults
-    method: val("method", "greedy"),
-    beam_width: Number(val("beamWidth", "5") || 5),
-    max_length: Number(val("maxLength", "50") || 50),
-    device: val("device", "cpu"),
-    checkpoint_path: (val("checkpointPath", checkpointFallback) || checkpointFallback).trim(),
-    vocab_dir: (val("vocabDir", vocabFallback) || vocabFallback).trim(),
+    text: $("inputText").value,
+    to: $("to").value,
+    method: $("method").value,
+    beam_width: Number($("beamWidth").value || 5),
+    max_length: Number($("maxLength").value || 50),
+    device: $("device").value,
+    checkpoint_path: $("checkpointPath").value.trim(),
+    vocab_dir: $("vocabDir").value.trim(),
   };
 }
 
@@ -97,12 +87,11 @@ async function translate() {
 }
 
 function clearAll() {
-  const input = $("inputText");
-  if (input) input.value = "";
+  $("inputText").value = "";
   setOutput("");
   setMeta("");
   setStatus("");
-  if (input) input.focus();
+  $("inputText").focus();
 }
 
 async function copyOutput() {
@@ -120,10 +109,8 @@ async function copyOutput() {
 }
 
 function updateBeamEnabled() {
-  const methodEl = $("method");
+  const method = $("method").value;
   const beam = $("beamWidth");
-  if (!methodEl || !beam) return;
-  const method = methodEl.value;
   const disabled = method !== "beam_search";
   beam.disabled = disabled;
   beam.classList.toggle("opacity-60", disabled);
@@ -133,19 +120,12 @@ window.addEventListener("DOMContentLoaded", () => {
   healthCheck();
   updateBeamEnabled();
 
-  const translateBtn = $("translateBtn");
-  const clearBtn = $("clearBtn");
-  const copyBtn = $("copyBtn");
-  const method = $("method");
-  const inputText = $("inputText");
+  $("translateBtn").addEventListener("click", translate);
+  $("clearBtn").addEventListener("click", clearAll);
+  $("copyBtn").addEventListener("click", copyOutput);
+  $("method").addEventListener("change", updateBeamEnabled);
 
-  if (translateBtn) translateBtn.addEventListener("click", translate);
-  if (clearBtn) clearBtn.addEventListener("click", clearAll);
-  if (copyBtn) copyBtn.addEventListener("click", copyOutput);
-  if (method) method.addEventListener("change", updateBeamEnabled);
-
-  if (inputText)
-    inputText.addEventListener("keydown", (e) => {
+  $("inputText").addEventListener("keydown", (e) => {
     const isMac = navigator.platform.toLowerCase().includes("mac");
     const combo = isMac ? e.metaKey : e.ctrlKey;
     if (combo && e.key === "Enter") {
